@@ -2,20 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:numberpicker/numberpicker.dart';
 import 'package:ricas_obleas/components/Additions.dart';
-import 'package:ricas_obleas/db/operation.dart';
+import 'package:ricas_obleas/db/db_context.dart';
 import 'package:ricas_obleas/models/order.dart';
 
+import '../db/order_dao.dart';
+import '../db/product_dao.dart';
 import '../models/product.dart';
-
-class SavePageArguments{
-  List<Product> products;
-  Order order;
-  SavePageArguments({required this.order, required this.products});
-}
+import '../repositories/sale_repository.dart';
 
 class SavePage extends StatefulWidget {
   static const String ROUTE = "/save";
-
   @override
   State<SavePage> createState() => _SavePageState();
 }
@@ -24,7 +20,24 @@ class _SavePageState extends State<SavePage> {
   var count = 1;
   double price = 2000;
   List<String> additions = [];
+
+  Order order = Order();
   List<Product> productList = [];
+
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    print("initState");
+
+    Future.delayed(Duration.zero,(){
+      print("dispached ");
+      Order order = ModalRoute.of(context)!.settings.arguments as Order;
+      print("loaded order ${order.id}");
+      _loadSale(order);
+    });
+  }
 
   void onChangeSweet(bool val, String name) {
     if (val) {
@@ -54,16 +67,27 @@ class _SavePageState extends State<SavePage> {
     }
   }
 
-  final _formKey = GlobalKey<FormState>();
+  void onAddProduct(Product sale) {
+    setState(() {
+      productList.add(sale);
+      sale = Product();
+    });
+  }
+
+  void onRemoveSaleItem(Product sale) {
+    setState(() {
+      productList.remove(sale);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    Order order = ModalRoute.of(context)!.settings.arguments as Order;
     var title = "Nueva Venta";
+
     if (order.id != null && order.id! > 0) {
       title = "Venta No. ${order.id}";
-      //_loadProducts(order.id ?? 0);
     }
+
     return WillPopScope(
       onWillPop: _onWillPopScope,
       child: Scaffold(
@@ -76,6 +100,13 @@ class _SavePageState extends State<SavePage> {
         floatingActionButton: FloatingActionButton(
           child: Icon(Icons.payments),
           onPressed: () async {
+            //  TODO: Dependency Injection
+            final db = await DbContext.openDB();
+            final OrderDAO orderDAO = OrderDAO(db: db);
+            final ProductDAO productDAO = ProductDAO(db: db);
+            final SaleRepository repository =
+                SaleRepository(orderDAO: orderDAO, productDAO: productDAO);
+
             var responseMessage = "";
             if (productList.length > 0) {
               //SAVE ORDER
@@ -84,47 +115,26 @@ class _SavePageState extends State<SavePage> {
               var totalCount = productList.fold(
                   0, (previousValue, element) => previousValue + element.count);
 
-              var idOrder = await Operation.saveOrder(Order(
-                  count: totalCount,
-                  price: totalPrice,
-                  date: DateTime.now().toIso8601String()));
+              var idOrder = await repository.SaveSale(
+                  Order(
+                      count: totalCount,
+                      price: totalPrice,
+                      date: DateTime.now().toIso8601String()),
+                  productList);
 
-              print("save Order $idOrder ");
-
-              //SAVE PRODUCTS
-              for (var product in productList) {
-                var idProduct = await Operation.saveProduct(Product(
-                    count: product.count,
-                    ingredients: product.ingredients,
-                    price: product.price,
-                    total: product.total,
-                    idOrder: idOrder));
-                print("saved product $idProduct from order $idOrder");
-              }
-              print("---finishOrder---");
-              responseMessage = "Se guardó la venta correctamente";
+              responseMessage = "Se guardó la venta $idOrder correctamente";
             } else {
               responseMessage = "Debe agregar al menos un producto";
             }
             final snackbar = SnackBar(content: Text(responseMessage));
             ScaffoldMessenger.of(context).showSnackBar(snackbar);
+            Future.delayed(Duration(seconds: 4),(){
+              Navigator.of(context).pop(true);
+            });
           },
         ),
       ),
     );
-  }
-
-  void onAddProduct(Product sale) {
-    setState(() {
-      productList.add(sale);
-      sale = Product();
-    });
-  }
-
-  void onRemoveSaleItem(Product sale) {
-    setState(() {
-      productList.remove(sale);
-    });
   }
 
   Widget _buildForm(Order sale) {
@@ -265,12 +275,19 @@ class _SavePageState extends State<SavePage> {
             }));
   }
 
-  _loadProducts(int idOrder) async {
-   var products = await Operation.getProducts(idOrder);
-   print("products: "+ products.toString());
-   setState(() {
-     productList = products;
-   });
+  _loadSale(Order order) async {
+    //  TODO: Dependency Injection
+    final db = await DbContext.openDB();
+    final OrderDAO orderDAO = OrderDAO(db: db);
+    final ProductDAO productDAO = ProductDAO(db: db);
+    final SaleRepository repository = SaleRepository(orderDAO: orderDAO, productDAO: productDAO);
+
+    var products = await repository.GetProductsByOrder(order.id ?? 0);
+    print("getting produtcs: ${products.length}");
+    setState(() {
+      order = order;
+      productList = products;
+    });
   }
 
   Future<bool> _onWillPopScope() {

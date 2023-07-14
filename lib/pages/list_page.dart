@@ -1,11 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:ricas_obleas/db/operation.dart';
+import 'package:ricas_obleas/db/db_context.dart';
+import 'package:ricas_obleas/db/order_dao.dart';
 import 'package:ricas_obleas/pages/save_page.dart';
 
+import '../db/product_dao.dart';
 import '../models/order.dart';
 import '../models/product.dart';
+import '../repositories/sale_repository.dart';
 
 class ListPage extends StatelessWidget {
   static const String ROUTE = "/";
@@ -24,6 +27,8 @@ class _SaleList extends StatefulWidget {
 class SaleListState extends State<_SaleList> {
   List<Order> orders = [];
   final cop = new NumberFormat("#,##0.00", "es_CO");
+
+
   @override
   void initState() {
     _loadOrders();
@@ -53,7 +58,7 @@ class SaleListState extends State<_SaleList> {
                 backgroundColor: MaterialStateColor.resolveWith(
                     (states) => Colors.redAccent)),
             onPressed: () async {
-              var result = await Operation.deleteDatabase();
+              var result = await DbContext.deleteDatabase();
               var message = "";
               if (result) {
                 message = "Se eliminó correctamente";
@@ -72,7 +77,14 @@ class SaleListState extends State<_SaleList> {
   }
 
   _loadOrders() async {
-    var dbOrders = await Operation.getOrders();
+    //  TODO: Dependency Injection
+    final db = await DbContext.openDB();
+    final OrderDAO orderDAO = OrderDAO(db: db);
+    final ProductDAO productDAO = ProductDAO(db:db);
+    final SaleRepository repository = SaleRepository(orderDAO: orderDAO, productDAO: productDAO);
+
+    var dbOrders = await repository.GetSales();
+
     setState(() {
       orders = dbOrders;
     });
@@ -84,9 +96,14 @@ class SaleListState extends State<_SaleList> {
     return Dismissible(
         key: Key(i.toString()),
         direction: DismissDirection.startToEnd,
-        onDismissed: (direction) {
-          print("deleting ${order.id}");
-          Operation.deleteOrder(order);
+        onDismissed: (direction) async {
+          //  TODO: Dependency Injection
+          final db = await DbContext.openDB();
+          final OrderDAO orderDAO = OrderDAO(db: db);
+          final ProductDAO productDAO = ProductDAO(db:db);
+          final SaleRepository repository = SaleRepository(orderDAO: orderDAO, productDAO: productDAO);
+
+          repository.DeleteSale(order);
         },
         background: Container(
           color: Colors.redAccent,
