@@ -3,8 +3,15 @@ import 'package:intl/intl.dart';
 import 'package:numberpicker/numberpicker.dart';
 import 'package:ricas_obleas/components/Additions.dart';
 import 'package:ricas_obleas/db/operation.dart';
+import 'package:ricas_obleas/models/order.dart';
 
 import '../models/product.dart';
+
+class SavePageArguments{
+  List<Product> products;
+  Order order;
+  SavePageArguments({required this.order, required this.products});
+}
 
 class SavePage extends StatefulWidget {
   static const String ROUTE = "/save";
@@ -16,22 +23,16 @@ class SavePage extends StatefulWidget {
 class _SavePageState extends State<SavePage> {
   var count = 1;
   double price = 2000;
-  var description = "";
   List<String> additions = [];
-  List<Product> saleItems = [];
+  List<Product> productList = [];
 
   void onChangeSweet(bool val, String name) {
-    var ins = description.split(",");
     if (val) {
-      ins.add(name);
-
       setState(() {
         price += 500;
         additions.add(name);
       });
     } else {
-      ins.remove(name);
-
       setState(() {
         price -= 500;
         additions.remove(name);
@@ -57,77 +58,81 @@ class _SavePageState extends State<SavePage> {
 
   @override
   Widget build(BuildContext context) {
-    Product sale = ModalRoute.of(context)!.settings.arguments as Product;
-
+    Order order = ModalRoute.of(context)!.settings.arguments as Order;
+    var title = "Nueva Venta";
+    if (order.id != null && order.id! > 0) {
+      title = "Venta No. ${order.id}";
+      //_loadProducts(order.id ?? 0);
+    }
     return WillPopScope(
       onWillPop: _onWillPopScope,
       child: Scaffold(
         appBar: AppBar(
-          title: Text("Nueva Venta"),
+          title: Text(title),
         ),
         body: Container(
-          child: _buildForm(sale),
+          child: _buildForm(order),
         ),
         floatingActionButton: FloatingActionButton(
           child: Icon(Icons.payments),
           onPressed: () async {
+            var responseMessage = "";
+            if (productList.length > 0) {
+              //SAVE ORDER
+              var totalPrice = productList.fold<double>(
+                  0, (value, element) => value + element.total);
+              var totalCount = productList.fold(
+                  0, (previousValue, element) => previousValue + element.count);
 
-/*
-            var validate = _formKey.currentState?.validate();
-            if (validate == true) {
-              if (sale.id != null && sale.id! > 0) {
-                //Update Sale
-                sale.count = count;
-                sale.ingredients = description;
-                sale.price = price;
-                sale.totalPrice = (count * price);
+              var idOrder = await Operation.saveOrder(Order(
+                  count: totalCount,
+                  price: totalPrice,
+                  date: DateTime.now().toIso8601String()));
 
-                var result = await Operation.update(sale);
-              } else {
-                //Save new Sale
-                var result = await Operation.insert(Sale(
-                  count: count,
-                  ingredients: description,
-                  price: price,
-                  totalPrice: (count * price),
-                  date: DateTime.now().toIso8601String(),
-                ));
+              print("save Order $idOrder ");
+
+              //SAVE PRODUCTS
+              for (var product in productList) {
+                var idProduct = await Operation.saveProduct(Product(
+                    count: product.count,
+                    ingredients: product.ingredients,
+                    price: product.price,
+                    total: product.total,
+                    idOrder: idOrder));
+                print("saved product $idProduct from order $idOrder");
               }
-
-              final snackbar =
-                  SnackBar(content: Text("Se Registro la venta correctamente"));
-              ScaffoldMessenger.of(context).showSnackBar(snackbar);
-            }
-* */
-
-            if (saleItems.length > 0) {
-
+              print("---finishOrder---");
+              responseMessage = "Se guardó la venta correctamente";
             } else {
-              final snackbar =
-              SnackBar(content: Text("Debe agregar al menos un producto"));
-              ScaffoldMessenger.of(context).showSnackBar(snackbar);
+              responseMessage = "Debe agregar al menos un producto";
             }
+            final snackbar = SnackBar(content: Text(responseMessage));
+            ScaffoldMessenger.of(context).showSnackBar(snackbar);
           },
         ),
       ),
     );
   }
 
-  void onAddSaleItem(Product sale) {
+  void onAddProduct(Product sale) {
     setState(() {
-      saleItems.add(sale);
+      productList.add(sale);
       sale = Product();
     });
   }
 
   void onRemoveSaleItem(Product sale) {
     setState(() {
-      saleItems.remove(sale);
+      productList.remove(sale);
     });
   }
 
-  Widget _buildForm(Product sale) {
+  Widget _buildForm(Order sale) {
     final cop = new NumberFormat("#,##0.00", "es_CO");
+    var description = "[Sencilla]";
+    if (additions.length > 0) {
+      description = additions.join(", ");
+    }
     return Form(
       key: _formKey,
       child: Column(
@@ -151,7 +156,7 @@ class _SavePageState extends State<SavePage> {
               Column(
                 children: [
                   Text(
-                    " ${0} / ${saleItems.fold<int>(0, (value, element) => value + element.count)}",
+                    " ${0} / ${productList.fold<int>(0, (value, element) => value + element.count)}",
                     style: TextStyle(fontSize: 36),
                   ),
                   Text("Obleas Preparadas")
@@ -185,7 +190,7 @@ class _SavePageState extends State<SavePage> {
                   ),
                   Text("(\$$price c/u)"),
                   Text(
-                    "[${additions.join(", ")}]",
+                    description,
                     overflow: TextOverflow.fade,
                   ),
                 ],
@@ -193,7 +198,7 @@ class _SavePageState extends State<SavePage> {
               FilledButton(
                 child: Text("Agregar"),
                 onPressed: () async {
-                  onAddSaleItem(Product(
+                  onAddProduct(Product(
                     count: count,
                     ingredients: description,
                     price: price,
@@ -210,11 +215,11 @@ class _SavePageState extends State<SavePage> {
             ],
           ),
           Divider(),
-          _buildOrder(saleItems),
+          _buildOrder(productList),
           Container(
             height: 50,
             child: Text(
-              "Total: \$ ${cop.format(saleItems.fold<double>(0, (value, element) => value + element.total))}",
+              "Total: \$ ${cop.format(productList.fold<double>(0, (value, element) => value + element.total))}",
               style: TextStyle(fontSize: 32, color: Colors.blue),
             ),
           )
@@ -249,12 +254,23 @@ class _SavePageState extends State<SavePage> {
                     titleAlignment: ListTileTitleAlignment.center,
                     title: Text("${item.count}: ${item.total}"),
                     subtitle: Text(item.ingredients),
+                    /*
+                    TODO: implement on ready product
                     trailing: Checkbox(
                       value: false,
                       onChanged: (val) {},
                     ),
+                     */
                   ));
             }));
+  }
+
+  _loadProducts(int idOrder) async {
+   var products = await Operation.getProducts(idOrder);
+   print("products: "+ products.toString());
+   setState(() {
+     productList = products;
+   });
   }
 
   Future<bool> _onWillPopScope() {

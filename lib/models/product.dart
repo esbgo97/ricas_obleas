@@ -4,8 +4,8 @@ class Product {
   String ingredients;
   double price;
   double total;
-
-  Product({this.id, this.count = 0,this.ingredients= "",this.price= 0, this.total = 0});
+  int idOrder;
+  Product({this.id, this.count = 0,this.ingredients= "",this.price= 0, this.total = 0, this.idOrder=0});
 
   Map<String,dynamic> toMap(){
     return {
@@ -13,8 +13,8 @@ class Product {
       "count":this.count,
       "price":this.price,
       "ingredients":this.ingredients,
-      "price": this.price,
-      "totalPrice":this.total,
+      "total":this.total,
+      "idOrder":this.idOrder
     };
   }
 }

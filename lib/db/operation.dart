@@ -8,9 +8,8 @@ import '../models/order.dart';
 import '../models/product.dart';
 
 List<String> SqlQueries = [
-  "CREATE TABLE orders (id INTEGER PRIMARY KEY, price REAL, date TEXT)",
-  "CREATE TABLE products (id INTEGER PRIMARY KEY AUTOINCREMENT, count INT, ingredients TEXT, price REAL, totalPrice REAL);",
-  "CREATE TABLE order_sale (id INTEGER PRIMARY KEY, idorder INTEGER REFERENCES orders(id), idsale INTEGER REFERENCES products(id));"
+  "CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, count INT, price REAL, date TEXT);",
+  "CREATE TABLE products (id INTEGER PRIMARY KEY AUTOINCREMENT, count INT, ingredients TEXT, price REAL, total REAL, idOrder INTEGER REFERENCES orders(id));",
 ];
 
 class Operation {
@@ -21,26 +20,45 @@ class Operation {
         db.execute(query);
       }
       return true;
-    }, version: 2);
+    }, version: 3);
   }
 
-  static Future<void> saveOrder(Order order) async {
+  static Future<bool> deleteDatabase() async {
+    try {
+      Database db = await openDB();
+      await databaseFactory.deleteDatabase(db.path);
+      return true;
+    } catch (err) {
+      print(err.toString());
+      return false;
+    }
+  }
+
+  static Future<int> saveOrder(Order order) async {
     Database db = await openDB();
     var result = db.insert("orders", order.toMap());
     print(result);
-    return;
+    return result;
   }
 
-  static Future<void> saveProduct(Product sale) async {
+  static Future<int> saveProduct(Product sale) async {
     Database db = await openDB();
     var result = db.insert("products", sale.toMap());
     print(result);
-    return;
+    return result;
   }
 
-  static Future<List<Product>> getProducts() async {
+  static Future<List<Product>> getProducts(int? idOrder) async {
     Database db = await openDB();
-    var result = await db.query("products", orderBy: "id DESC");
+
+    var whereArg = "idOrder";
+    if(idOrder! > 0){
+      whereArg = idOrder.toString();
+    }
+    var result = await db.query("products",
+        where: "idOrder = ?",
+        whereArgs: [whereArg],
+        orderBy: "id DESC");
     var mappedItems = List.generate(
         result.length,
         (index) => Product(
@@ -48,7 +66,7 @@ class Operation {
             count: int.parse(result[index]["count"].toString()),
             ingredients: result[index]["ingredients"].toString(),
             price: double.parse(result[index]["price"].toString()),
-            total: double.parse(result[index]["totalPrice"].toString())));
+            total: double.parse(result[index]["total"].toString())));
     return mappedItems;
   }
 
@@ -59,7 +77,7 @@ class Operation {
         result.length,
         (index) => Order(
             id: int.parse(result[index]["id"].toString()),
-            totalPrice: double.parse(result[index]["price"].toString()),
+            price: double.parse(result[index]["price"].toString()),
             date: result[index]["date"].toString()));
     return mapped;
   }

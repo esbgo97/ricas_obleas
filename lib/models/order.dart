@@ -1,16 +1,21 @@
-import 'dart:ffi';
-
-import 'package:ricas_obleas/models/product.dart';
-
 class Order {
   int? id;
-  double totalPrice;
+  int count;
+  double price;
   String date;
-  Order({this.id, this.totalPrice = 0, this.date = "", });
+
+  Order({
+    this.id,
+    this.count = 0,
+    this.price = 0,
+    this.date = "",
+  });
+
   Map<String, dynamic> toMap() {
     return {
       "id": this.id,
-      "totalPrice": this.totalPrice,
+      "count": this.count,
+      "price": this.price,
       "date": this.date,
     };
   }
