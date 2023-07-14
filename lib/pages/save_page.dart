@@ -4,7 +4,7 @@ import 'package:numberpicker/numberpicker.dart';
 import 'package:ricas_obleas/components/Additions.dart';
 import 'package:ricas_obleas/db/operation.dart';
 
-import '../models/sale.dart';
+import '../models/product.dart';
 
 class SavePage extends StatefulWidget {
   static const String ROUTE = "/save";
@@ -18,7 +18,7 @@ class _SavePageState extends State<SavePage> {
   double price = 2000;
   var description = "";
   List<String> additions = [];
-  List<Sale> saleItems = [];
+  List<Product> saleItems = [];
 
   void onChangeSweet(bool val, String name) {
     var ins = description.split(",");
@@ -28,7 +28,6 @@ class _SavePageState extends State<SavePage> {
       setState(() {
         price += 500;
         additions.add(name);
-        description = ins.join(",");
       });
     } else {
       ins.remove(name);
@@ -36,29 +35,20 @@ class _SavePageState extends State<SavePage> {
       setState(() {
         price -= 500;
         additions.remove(name);
-        description = ins.join(",");
       });
     }
   }
 
   void onChangeIngredient(bool val, String name) {
     if (val) {
-      var ins = description.split(",");
-      ins.add(name);
-
       setState(() {
         price += 1000;
         additions.add(name);
-        description = ins.join(",");
       });
     } else {
-      var ins = description.split(",");
-      ins.remove(name);
-
       setState(() {
         price -= 1000;
-        additions.add(name);
-        description = ins.join(",");
+        additions.remove(name);
       });
     }
   }
@@ -67,7 +57,7 @@ class _SavePageState extends State<SavePage> {
 
   @override
   Widget build(BuildContext context) {
-    Sale sale = ModalRoute.of(context)!.settings.arguments as Sale;
+    Product sale = ModalRoute.of(context)!.settings.arguments as Product;
 
     return WillPopScope(
       onWillPop: _onWillPopScope,
@@ -81,8 +71,9 @@ class _SavePageState extends State<SavePage> {
         floatingActionButton: FloatingActionButton(
           child: Icon(Icons.payments),
           onPressed: () async {
-            var validate = _formKey.currentState?.validate();
 
+/*
+            var validate = _formKey.currentState?.validate();
             if (validate == true) {
               if (sale.id != null && sale.id! > 0) {
                 //Update Sale
@@ -107,20 +98,35 @@ class _SavePageState extends State<SavePage> {
                   SnackBar(content: Text("Se Registro la venta correctamente"));
               ScaffoldMessenger.of(context).showSnackBar(snackbar);
             }
+* */
+
+            if (saleItems.length > 0) {
+
+            } else {
+              final snackbar =
+              SnackBar(content: Text("Debe agregar al menos un producto"));
+              ScaffoldMessenger.of(context).showSnackBar(snackbar);
+            }
           },
         ),
       ),
     );
   }
 
-  void onAddSaleItem(Sale sale) {
+  void onAddSaleItem(Product sale) {
     setState(() {
       saleItems.add(sale);
-      sale = Sale();
+      sale = Product();
     });
   }
 
-  Widget _buildForm(Sale sale) {
+  void onRemoveSaleItem(Product sale) {
+    setState(() {
+      saleItems.remove(sale);
+    });
+  }
+
+  Widget _buildForm(Product sale) {
     final cop = new NumberFormat("#,##0.00", "es_CO");
     return Form(
       key: _formKey,
@@ -145,10 +151,10 @@ class _SavePageState extends State<SavePage> {
               Column(
                 children: [
                   Text(
-                    "${saleItems.fold<int>(0, (value, element) => value + element.count)}",
+                    " ${0} / ${saleItems.fold<int>(0, (value, element) => value + element.count)}",
                     style: TextStyle(fontSize: 36),
                   ),
-                  Text("Obleas para preparar")
+                  Text("Obleas Preparadas")
                 ],
               )
             ],
@@ -177,18 +183,21 @@ class _SavePageState extends State<SavePage> {
                     "Valor : \$ ${cop.format(price * count)} ",
                     style: TextStyle(fontSize: 28),
                   ),
-                  Text("(\$$price c/u) [$description]"),
+                  Text("(\$$price c/u)"),
+                  Text(
+                    "[${additions.join(", ")}]",
+                    overflow: TextOverflow.fade,
+                  ),
                 ],
               ),
               FilledButton(
                 child: Text("Agregar"),
                 onPressed: () async {
-                  onAddSaleItem(Sale(
+                  onAddSaleItem(Product(
                     count: count,
                     ingredients: description,
                     price: price,
-                    totalPrice: (count * price),
-                    date: DateTime.now().toIso8601String(),
+                    total: (count * price),
                   ));
                   setState(() {
                     count = 1;
@@ -205,7 +214,7 @@ class _SavePageState extends State<SavePage> {
           Container(
             height: 50,
             child: Text(
-              "Total: \$ ${cop.format(saleItems.fold<double>(0, (value, element) => value + element.totalPrice))}",
+              "Total: \$ ${cop.format(saleItems.fold<double>(0, (value, element) => value + element.total))}",
               style: TextStyle(fontSize: 32, color: Colors.blue),
             ),
           )
@@ -214,19 +223,31 @@ class _SavePageState extends State<SavePage> {
     );
   }
 
-  Widget _buildOrder(List<Sale> sales) {
+  Widget _buildOrder(List<Product> sales) {
     return Expanded(
         child: ListView.builder(
             itemCount: sales.length,
             itemBuilder: (BuildContext context, int i) {
               final item = sales[i];
               print(item.toString());
+
               return Dismissible(
-                  key: Key(i.toString()),
+                  key: UniqueKey(),
+                  onDismissed: (direction) {
+                    onRemoveSaleItem(sales[i]);
+                  },
+                  background: Container(
+                    alignment: Alignment.centerLeft,
+                    color: Colors.redAccent,
+                    child: Icon(
+                      Icons.delete,
+                      color: Colors.white,
+                    ),
+                  ),
                   child: ListTile(
                     leading: Text("${i + 1}"),
                     titleAlignment: ListTileTitleAlignment.center,
-                    title: Text("${item.count}: ${item.totalPrice}"),
+                    title: Text("${item.count}: ${item.total}"),
                     subtitle: Text(item.ingredients),
                     trailing: Checkbox(
                       value: false,
